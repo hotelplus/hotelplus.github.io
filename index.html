@@ -168,7 +168,7 @@ form.f{display:flex;flex-direction:column;gap:10px}
 <script>
 /* ======================= AYARLAR (buradan değiştirilebilir) ======================= */
 const APP_ADI = "HotelPlus";
-const APP_VERSION = 18;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
+const APP_VERSION = 19;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
 const WEB_ADRES = "https://hotelplus.github.io/";
 const OTEL_ADI = "Otel";
 const VARSAYILAN_DEPARTMANLAR = ["Yönetim","Bilgi İşlem (IT)","İnsan Kaynakları","Resepsiyon","Kat Hizmetleri","Çamaşırhane","Teknik Servis","Mutfak","Restoran","Bulaşıkhane","Yiyecek & İçecek","Satın Alma","Spa","Güvenlik","Muhasebe","Satış & Rezervasyon","Animasyon","Diğer"];
@@ -330,7 +330,8 @@ function handleErr(e){
 const staffById = id => S.staff.find(s => s.id === id);
 const nameOf = id => (staffById(id) || {}).ad || "—";
 const me = () => staffById(meId);
-const isAdmin = () => !!(authUser && authUser.email === "yonetici@" + EMAIL_DOMAIN);
+const ADMIN_UID = "kXAerL2by7dm4hQVSaOVApu2PB53";
+const isAdmin = () => !!(authUser && (authUser.uid === ADMIN_UID || authUser.email === "yonetici@" + EMAIL_DOMAIN));
 const myRol = () => mode === "demo" ? "gm" : ((me() && me().rol) || (member && member.rol) || "personel");
 const myDept = () => (me() && me().dept) || (member && member.dept) || "";
 const isGM = () => myRol() === "gm";
@@ -601,8 +602,9 @@ function renderLogin(){
       if (key === "yonetici") email = "yonetici@" + EMAIL_DOMAIN;
       else {
         const d = await col("logins").doc(key).get({source:"server"});
-        if (!d.exists){ loginErr = "Bu kullanıcı adı ya da telefonla aktif bir hesap yok. Yönetime başvur."; renderLogin(); return; }
-        email = d.data().email;
+        if (d.exists) email = d.data().email;
+        else if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(key) && !key.endsWith("@" + EMAIL_DOMAIN)) email = key;
+        else { loginErr = "Bu kullanıcı adı ya da telefonla aktif bir hesap yok. Yönetime başvur."; renderLogin(); return; }
       }
       await firebase.auth().signInWithEmailAndPassword(email, $("#lP").value);
     } catch(err){ loginErr = authMsg(err); renderLogin(); } };
@@ -649,8 +651,12 @@ function forgotSheet(){
     <form class="f" id="fgf"><div class="fld"><label for="fT">Kullanıcı adın veya telefonun</label><input id="fT" autocapitalize="none" spellcheck="false" placeholder="ad.soyad@otel.com ya da 05xx…" required></div><div id="fE"></div><button class="btn go block">Talep gönder</button></form>`, () => {
     $("#fgf").onsubmit = async e => { e.preventDefault(); const tel = loginKey($("#fT").value);
       if (!tel || tel === "yonetici"){ $("#fE").innerHTML = `<div class="banner">Kullanıcı adını ya da telefonunu doğru yaz.</div>`; return; }
-      try { const lg = await FS.collection("logins").doc(tel).get({source:"server"}); if (!lg.exists || !lg.data().otel){ $("#fE").innerHTML = `<div class="banner">Bu kullanıcı adı ya da telefonla kayıtlı hesap bulunamadı.</div>`; return; }
-        await FS.collection("oteller").doc(lg.data().otel).collection("sifreTalepleri").doc(tel).set({tel, zaman:Date.now()}); closeSheet(); toast("Talebin müdürüne iletildi."); }
+      try { const lg = await FS.collection("logins").doc(tel).get({source:"server"});
+        if (!lg.exists && /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(tel)){ try { await firebase.auth().sendPasswordResetEmail(tel); } catch(x){} closeSheet(); toast("Bu e-postaya kayıtlı bir hesap varsa şifre sıfırlama bağlantısı gönderildi. Spam klasörüne de bak."); return; }
+        if (!lg.exists || !lg.data().otel){ $("#fE").innerHTML = `<div class="banner">Bu kullanıcı adı ya da telefonla kayıtlı hesap bulunamadı.</div>`; return; }
+        await FS.collection("oteller").doc(lg.data().otel).collection("sifreTalepleri").doc(tel).set({tel, zaman:Date.now()});
+        if (lg.data().yonetici){ try { await FS.collection("destekTalepleri").doc(tel).set({otel:lg.data().otel, kullanici:tel, tur:lg.data().yonetici, zaman:Date.now()}); } catch(x){} closeSheet(); toast("Talebin HotelPlus destek ekibine iletildi. Yeni şifren sana iletilecek."); return; }
+        closeSheet(); toast("Talebin müdürüne iletildi."); }
       catch(er){ $("#fE").innerHTML = `<div class="banner">${esc(authMsg(er))}</div>`; } };
   });
 }
@@ -2063,7 +2069,7 @@ function bulkResult(done, failed){
 let otelUnsub = null;
 function subscribeOteller(){
   if (otelUnsub) otelUnsub();
-  otelUnsub = FS.collection("oteller").onSnapshot(sn => { otelList = sn.docs.map(d => ({id:d.id, ...d.data()})).sort((a,b) => String(a.ad).localeCompare(String(b.ad), "tr")); if (mode === "vendor") renderVendor(); else refresh(); }, () => {});
+  otelUnsub = FS.collection("oteller").onSnapshot(sn => { otelList = sn.docs.map(d => ({id:d.id, ...d.data()})).sort((a,b) => String(a.ad).localeCompare(String(b.ad), "tr")); if (!window.__mal){ window.__mal = 1; markAdminLogins(); } if (mode === "vendor") renderVendor(); else refresh(); }, () => {});
   unsubs.push(() => { if (otelUnsub){ otelUnsub(); otelUnsub = null; } });
 }
 const LIS_TUR = {gun15:"15 gün", aylik:"Aylık", ay3:"3 ay", ay6:"6 ay", yillik:"1 yıl", suresiz:"Süresiz"};
@@ -2074,7 +2080,7 @@ const licSelect = (id, sel) => `<select id="${id}">${Object.entries(LIS_TUR).map
 function licEnd(tur, from){ return tur === "suresiz" ? SURESIZ : Math.max(Date.now(), from||0) + LIS_GUN[tur]*864e5; }
 function vendorHtml(){
   const now = Date.now();
-  return `<button class="btn go block" id="vnNew">+ Yeni otel ve lisans</button>
+  return destekHtml() + `<button class="btn go block" id="vnNew">+ Yeni otel ve lisans</button>
     <div class="hint">Lisans süresi dolan ya da askıya alınan otelde kimse işlem yapamaz; veriler silinmez. Otellerin içindeki personel, misafir ve görev bilgilerini buradan göremezsin. Lisans bilgilerini otel personeli görmez.</div>`
     + (otelList.length ? otelList.map(o => { const sz = o.bitis >= SURESIZ - 864e5; const dl = Math.ceil(((o.bitis||0) - now) / 864e5); const bad = o.durum !== "aktif" || dl <= 0;
       return `<div class="card" style="${bad?"border-color:var(--bad)":!sz&&dl<=7?"border-color:var(--warn)":""}"><div class="t1 li"><div class="main"><b>${esc(o.ad)}</b><span>${esc(o.domain||"")} · ${esc(turAd(o.lisansTur))}${o.maxPersonel?` · en fazla ${o.maxPersonel} personel`:""}</span></div><span class="chip ${bad?"bad":!sz&&dl<=7?"warn":"ok"}">${o.durum!=="aktif"?"Askıda":dl<=0?"Süresi doldu":sz?"Süresiz":dl+" gün"}</span></div>
@@ -2104,7 +2110,10 @@ async function deleteHotel(o){
   } catch(e){ handleErr(e); }
 }
 function bindVendor(){
+  vendorExtras();
   $("#vnNew").onclick = newHotelSheet;
+  document.querySelectorAll("[data-dsx]").forEach(b => b.onclick = async () => { try { await FS.collection("destekTalepleri").doc(b.dataset.dsx).delete(); } catch(e){ handleErr(e); } });
+  document.querySelectorAll("[data-dsr]").forEach(b => b.onclick = () => { const d = destekList.find(x => x.id === b.dataset.dsr); const o = otelList.find(x => x.id === d.otel); if (o) hotelAccountSheet(o, d.tur); });
   document.querySelectorAll("[data-vl]").forEach(b => b.onclick = () => licSheet(otelList.find(x => x.id === b.dataset.vl)));
   document.querySelectorAll("[data-vs]").forEach(b => b.onclick = () => { const o = otelList.find(x => x.id === b.dataset.vs); const to = o.durum === "aktif" ? "askida" : "aktif"; confirmSheet(`${o.ad} ${to==="askida"?"askıya alınsın mı? Otelde kimse işlem yapamaz.":"yeniden aktif edilsin mi?"}`, async () => { try { await FS.collection("oteller").doc(o.id).update({durum:to}); } catch(e){ handleErr(e); } }, to==="askida"?"Askıya al":"Aktif et"); });
   document.querySelectorAll("[data-vdel]").forEach(b => b.onclick = () => { const o = otelList.find(x => x.id === b.dataset.vdel); confirmSheet(`${o.ad} silinsin mi? Oteldeki herkesin girişi kapanır ve otelin verilerine bir daha ulaşılamaz. Bu geri alınamaz.`, () => deleteHotel(o), "Oteli sil"); });
@@ -2116,7 +2125,7 @@ function renderVendor(){
   $("#top").innerHTML = `<div class="mark">${icon("star","#d9a426")}</div><h1>Lisans yönetimi</h1>${OTEL&&mode!=="vendor"?`<button class="hbtn" id="vnBack">Otele dön</button>`:""}<button class="hbtn" id="vnOut" aria-label="Çıkış">${icon("user")}</button>`;
   $("#main").innerHTML = `<div class="list">${vendorHtml()}</div>`;
   bindVendor();
-  $("#vnOut").onclick = () => firebase.auth().signOut();
+  $("#vnOut").onclick = vendorAccountSheet;
   if ($("#vnBack")) $("#vnBack").onclick = () => location.reload();
 }
 async function withSetup(otelId, fn){
@@ -2137,8 +2146,9 @@ async function hotelAccess(otelId, st, pw, kullanici, k){
   if (st.uid && st.uid !== uid){ try { await FS.collection("members").doc(st.uid).delete(); } catch(e){} }
   await H("staff").doc(st.id).set({ad:st.ad, dept:st.dept, rol:st.rol, unvan:st.unvan||"", durum:"aktif", uid, authEmail:email, kullanici});
   await H("staffTel").doc(st.id).set({tel:st.tel||"", sifre:pw});
-  await FS.collection("logins").doc(kullanici).set({email, staffId:st.id, otel:otelId});
-  if (telOk(st.tel||"")) await FS.collection("logins").doc(st.tel).set({email, staffId:st.id, otel:otelId});
+  await FS.collection("logins").doc(kullanici).set({email, staffId:st.id, otel:otelId, yonetici:k});
+  if (telOk(st.tel||"")) await FS.collection("logins").doc(st.tel).set({email, staffId:st.id, otel:otelId, yonetici:k});
+  try { await FS.collection("destekTalepleri").doc(kullanici).delete(); if (st.tel) await FS.collection("destekTalepleri").doc(st.tel).delete(); } catch(e){}
   await FS.collection("oteller").doc(otelId).update({[k+"StaffId"]:st.id, [k+"Ad"]:st.ad, [k+"Kullanici"]:kullanici, [k+"Uid"]:uid, [k+"Tel"]:st.tel||""});
   return uid;
 }
@@ -2218,6 +2228,40 @@ function hotelAccountSheet(o, k){
       try { await withSetup(o.id, () => hotelAccess(o.id, {id:o[k+"StaffId"], ad:o[k+"Ad"], dept:T.dept, rol:T.rol, unvan:T.unvan, tel:o[k+"Tel"]||"", uid:o[k+"Uid"]}, pw, o[k+"Kullanici"], k)); credSheet({ad:o[k+"Ad"], tel:o[k+"Tel"]||""}, o[k+"Kullanici"], pw); }
       catch(e){ b.disabled = false; b.textContent = "Yeni şifre oluştur"; handleErr(e); } };
   });
+}
+
+function vendorAccountSheet(){
+  const em = authUser && authUser.email || "", real = em && !em.endsWith("@" + EMAIL_DOMAIN);
+  sheet("Lisans sahibi hesabı", `<div class="card"><div>Giriş: <b>${real ? esc(em) : "yonetici"}</b></div><div class="muted">${real ? "Şifreni unutursan giriş ekranında “Şifremi unuttum”a bu e-postayı yaz; sıfırlama bağlantısı bu adrese gelir." : "Henüz e-posta bağlı değil. Bağlarsan bu e-postayla giriş yapar, şifreni unutunca kendine sıfırlama bağlantısı alırsın."}</div></div>
+    <form class="f" id="veF"><div class="fld"><label for="veE">${real?"Yeni e-posta":"E-posta adresin"}</label><input id="veE" type="email" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="hotelplus.destek@gmail.com" required></div>
+    <div class="fld"><label for="veP">Şu anki şifren</label><input id="veP" type="password" required></div><div id="veM"></div><button class="btn go block" id="veGo">${real?"E-postayı değiştir":"E-postamı bağla"}</button></form>
+    <form class="f" id="vpF"><b>Şifremi değiştir</b><div class="row2"><div class="fld"><label for="vpO">Şu anki şifre</label><input id="vpO" type="password" required></div><div class="fld"><label for="vpN">Yeni şifre (en az 8)</label><input id="vpN" type="password" minlength="8" required></div></div><div id="vpM"></div><button class="btn block">Şifreyi değiştir</button></form>
+    <button class="btn danger block" id="veOut">Çıkış yap</button>`, () => {
+    const reauth = pw => firebase.auth().currentUser.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(firebase.auth().currentUser.email, pw));
+    $("#veF").onsubmit = async e => { e.preventDefault(); const to = $("#veE").value.trim().toLowerCase(), m = t => $("#veM").innerHTML = `<div class="banner">${esc(t)}</div>`;
+      try { await reauth($("#veP").value); await firebase.auth().currentUser.verifyBeforeUpdateEmail(to); m(`${to} adresine onay e-postası gönderildi. E-postadaki bağlantıya bastıktan sonra bu adresle giriş yaparsın. Gelen kutunda yoksa Spam klasörüne bak.`); }
+      catch(er){ m(er.code === "auth/email-already-in-use" ? "Bu e-posta başka bir hesapta kullanılıyor." : authMsg(er)); } };
+    $("#vpF").onsubmit = async e => { e.preventDefault(); const m = t => $("#vpM").innerHTML = `<div class="banner">${esc(t)}</div>`;
+      try { await reauth($("#vpO").value); await firebase.auth().currentUser.updatePassword($("#vpN").value); m("Şifren değiştirildi."); $("#vpF").reset(); }
+      catch(er){ m(authMsg(er)); } };
+    $("#veOut").onclick = () => { closeSheet(); firebase.auth().signOut(); };
+  });
+}
+let destekList = [];
+function destekHtml(){
+  if (!destekList.length) return "";
+  return `<div class="card" style="border-color:var(--warn)"><b>Şifre talepleri (${destekList.length})</b><div class="muted">Otellerin IT / genel müdürü şifresini unuttu.</div>${destekList.map(d => { const o = otelList.find(x => x.id === d.otel);
+    return `<div class="li" style="margin-top:8px"><div class="main"><b>${esc(o ? o.ad : d.otel)}</b><span>${esc(HESAP_TUR[d.tur] ? HESAP_TUR[d.tur].kisa : "")} · ${esc(d.kullanici)} · ${fmtD(d.zaman)}</span></div></div>
+      <div class="acts">${o?`<button class="btn go sm" data-dsr="${esc(d.id)}">Yeni şifre ver</button>`:""}<button class="btn sm" data-dsx="${esc(d.id)}">Kaldır</button></div>`; }).join("")}</div>`;
+}
+let destekFixed = false;
+function vendorExtras(){
+  if (destekFixed) return; destekFixed = true;
+  unsubs.push(FS.collection("destekTalepleri").onSnapshot(sn => { const before = destekList.length; destekList = sn.docs.map(d => ({id:d.id, ...d.data()})).sort((a,b) => b.zaman - a.zaman); if (destekList.length > before && before >= 0) { try { beep(); } catch(e){} } if (mode === "vendor") renderVendor(); else refresh(); }, () => {}));
+}
+async function markAdminLogins(){
+  for (const o of otelList) for (const k of ["it","gm"]) { const u = o[k+"Kullanici"]; if (!u) continue;
+    for (const key of [u, o[k+"Tel"]].filter(Boolean)) { try { const d = await FS.collection("logins").doc(key).get(); if (d.exists && d.data().yonetici !== k) await FS.collection("logins").doc(key).set({yonetici:k}, {merge:true}); } catch(e){} } }
 }
 
 /* ---------------- Eski tek otelli verinin taşınması (bir kez, uygulama sahibinin cihazında) ---------------- */
