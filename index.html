@@ -168,7 +168,7 @@ form.f{display:flex;flex-direction:column;gap:10px}
 <script>
 /* ======================= AYARLAR (buradan değiştirilebilir) ======================= */
 const APP_ADI = "HotelPlus";
-const APP_VERSION = 17;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
+const APP_VERSION = 18;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
 const WEB_ADRES = "https://hotelplus.github.io/";
 const OTEL_ADI = "Otel";
 const VARSAYILAN_DEPARTMANLAR = ["Yönetim","Bilgi İşlem (IT)","İnsan Kaynakları","Resepsiyon","Kat Hizmetleri","Çamaşırhane","Teknik Servis","Mutfak","Restoran","Bulaşıkhane","Yiyecek & İçecek","Satın Alma","Spa","Güvenlik","Muhasebe","Satış & Rezervasyon","Animasyon","Diğer"];
@@ -2078,8 +2078,8 @@ function vendorHtml(){
     <div class="hint">Lisans süresi dolan ya da askıya alınan otelde kimse işlem yapamaz; veriler silinmez. Otellerin içindeki personel, misafir ve görev bilgilerini buradan göremezsin. Lisans bilgilerini otel personeli görmez.</div>`
     + (otelList.length ? otelList.map(o => { const sz = o.bitis >= SURESIZ - 864e5; const dl = Math.ceil(((o.bitis||0) - now) / 864e5); const bad = o.durum !== "aktif" || dl <= 0;
       return `<div class="card" style="${bad?"border-color:var(--bad)":!sz&&dl<=7?"border-color:var(--warn)":""}"><div class="t1 li"><div class="main"><b>${esc(o.ad)}</b><span>${esc(o.domain||"")} · ${esc(turAd(o.lisansTur))}${o.maxPersonel?` · en fazla ${o.maxPersonel} personel`:""}</span></div><span class="chip ${bad?"bad":!sz&&dl<=7?"warn":"ok"}">${o.durum!=="aktif"?"Askıda":dl<=0?"Süresi doldu":sz?"Süresiz":dl+" gün"}</span></div>
-        <div class="meta" style="display:flex;flex-direction:column;gap:2px"><span>Bitiş: <b>${sz?"süresiz":o.bitis?fmtD(o.bitis):"—"}</b></span>${o.gmAd?`<span>Genel müdür: ${esc(o.gmAd)}</span>`:""}${o.gmKullanici?`<span>${esc(o.gmKullanici)}</span>`:""}${o.iletisim?`<span>${esc(o.iletisim)}</span>`:""}</div>
-        <div class="acts"><button class="btn ok sm" data-vl="${esc(o.id)}">Lisans ver / uzat</button><button class="btn sm ${o.durum==="aktif"?"danger":""}" data-vs="${esc(o.id)}">${o.durum==="aktif"?"Askıya al":"Aktif et"}</button><button class="btn sm" data-vg="${esc(o.id)}">${o.gmKullanici?"Genel müdür şifresi":"Genel müdür hesabı aç"}</button><button class="btn sm danger" data-vdel="${esc(o.id)}">Sil</button></div></div>`; }).join("")
+        <div class="meta" style="display:flex;flex-direction:column;gap:2px"><span>Bitiş: <b>${sz?"süresiz":o.bitis?fmtD(o.bitis):"—"}</b></span>${["it","gm"].map(k => o[k+"Kullanici"] ? `<span><b>${HESAP_TUR[k].kisa}:</b> ${esc(o[k+"Ad"]||"")}${o[k+"Tel"]?` · <a href="tel:${esc(o[k+"Tel"])}">${esc(fmtTel(o[k+"Tel"]))}</a>`:""}<br><span class="muted">${esc(o[k+"Kullanici"])}</span></span>` : `<span class="muted">${HESAP_TUR[k].kisa}: hesap yok</span>`).join("")}${o.iletisim?`<span>Not: ${esc(o.iletisim)}</span>`:""}</div>
+        <div class="acts"><button class="btn ok sm" data-vl="${esc(o.id)}">Lisans ver / uzat</button><button class="btn sm ${o.durum==="aktif"?"danger":""}" data-vs="${esc(o.id)}">${o.durum==="aktif"?"Askıya al":"Aktif et"}</button>${["it","gm"].map(k => `<button class="btn sm" data-vg="${esc(o.id)}" data-k="${k}">${HESAP_TUR[k].kisa} ${o[k+"Kullanici"]?"şifresi":"hesabı aç"}</button>`).join("")}<button class="btn sm danger" data-vdel="${esc(o.id)}">Sil</button></div></div>`; }).join("")
       : `<div class="empty">Henüz otel yok.</div>`);
 }
 function licSheet(o){
@@ -2108,7 +2108,7 @@ function bindVendor(){
   document.querySelectorAll("[data-vl]").forEach(b => b.onclick = () => licSheet(otelList.find(x => x.id === b.dataset.vl)));
   document.querySelectorAll("[data-vs]").forEach(b => b.onclick = () => { const o = otelList.find(x => x.id === b.dataset.vs); const to = o.durum === "aktif" ? "askida" : "aktif"; confirmSheet(`${o.ad} ${to==="askida"?"askıya alınsın mı? Otelde kimse işlem yapamaz.":"yeniden aktif edilsin mi?"}`, async () => { try { await FS.collection("oteller").doc(o.id).update({durum:to}); } catch(e){ handleErr(e); } }, to==="askida"?"Askıya al":"Aktif et"); });
   document.querySelectorAll("[data-vdel]").forEach(b => b.onclick = () => { const o = otelList.find(x => x.id === b.dataset.vdel); confirmSheet(`${o.ad} silinsin mi? Oteldeki herkesin girişi kapanır ve otelin verilerine bir daha ulaşılamaz. Bu geri alınamaz.`, () => deleteHotel(o), "Oteli sil"); });
-  document.querySelectorAll("[data-vg]").forEach(b => b.onclick = () => gmPassSheet(otelList.find(x => x.id === b.dataset.vg)));
+  document.querySelectorAll("[data-vg]").forEach(b => b.onclick = () => hotelAccountSheet(otelList.find(x => x.id === b.dataset.vg), b.dataset.k));
 }
 VIEWS.lisans = { title: "Lisans yönetimi", allow: () => isAdmin(), live: vendorHtml, bind: bindVendor };
 function renderVendor(){
@@ -2123,7 +2123,11 @@ async function withSetup(otelId, fn){
   await FS.collection("oteller").doc(otelId).update({kurulum:true});
   try { return await fn(); } finally { try { await FS.collection("oteller").doc(otelId).update({kurulum:false}); } catch(e){} }
 }
-async function hotelAccess(otelId, st, pw, kullanici){
+const HESAP_TUR = {
+  it: {ad:"Bilgi İşlem (IT)", kisa:"IT", dept:"Bilgi İşlem (IT)", rol:"mudur", unvan:"Bilgi İşlem Müdürü"},
+  gm: {ad:"Genel müdür", kisa:"Genel müdür", dept:"Yönetim", rol:"gm", unvan:"Genel Müdür"}
+};
+async function hotelAccess(otelId, st, pw, kullanici, k){
   const H = c => FS.collection("oteller").doc(otelId).collection(c);
   const email = "u" + uid8() + "@" + EMAIL_DOMAIN;
   const sa = await secondaryAuth();
@@ -2135,63 +2139,83 @@ async function hotelAccess(otelId, st, pw, kullanici){
   await H("staffTel").doc(st.id).set({tel:st.tel||"", sifre:pw});
   await FS.collection("logins").doc(kullanici).set({email, staffId:st.id, otel:otelId});
   if (telOk(st.tel||"")) await FS.collection("logins").doc(st.tel).set({email, staffId:st.id, otel:otelId});
-  await FS.collection("oteller").doc(otelId).update({gmStaffId:st.id, gmAd:st.ad, gmKullanici:kullanici, gmUid:uid, gmTel:st.tel||""});
+  await FS.collection("oteller").doc(otelId).update({[k+"StaffId"]:st.id, [k+"Ad"]:st.ad, [k+"Kullanici"]:kullanici, [k+"Uid"]:uid, [k+"Tel"]:st.tel||""});
   return uid;
+}
+function userFromName(ad, dom){ const parts = slugUser(ad).split(".").filter(Boolean); return (parts.length > 1 ? parts[0] + "." + parts[parts.length-1] : (parts[0]||"yonetici")) + "@" + dom; }
+async function openHotelAccount(o, k, ad, tel){
+  const T = HESAP_TUR[k];
+  const kullanici = userFromName(ad, o.domain || domainFromHotel(o.ad));
+  if ((await FS.collection("logins").doc(kullanici).get({source:"server"})).exists) throw {code:"user-taken", kullanici};
+  const pw = genPw();
+  await hotelAccess(o.id, {id:"p" + uid8(), ad, dept:T.dept, rol:T.rol, unvan:T.unvan, tel}, pw, kullanici, k);
+  return {ad, tel, kullanici, pw, tur:T.kisa};
+}
+function credListSheet(list){
+  if (list.length === 1) return credSheet({ad:list[0].ad, tel:list[0].tel}, list[0].kullanici, list[0].pw);
+  sheet("Giriş bilgileri", list.map((r,i) => `<div class="card"><b>${esc(r.tur)}: ${esc(r.ad)}</b><div>Kullanıcı adı: <b>${esc(r.kullanici)}</b></div><div>Şifre: <b class="num">${esc(r.pw)}</b></div>
+    <div class="acts"><button class="btn sm" data-cc="${i}">Kopyala</button><button class="btn go sm" data-cs="${i}">Gönder</button>${r.tel?`<a class="btn sm" style="text-decoration:none" href="${esc(smsLink(r.tel, credMsg(r, r.kullanici, r.pw)))}">SMS</a>`:""}</div></div>`).join("") + `<button class="btn block" id="clOk">Kapat</button>`, () => {
+    document.querySelectorAll("[data-cc]").forEach(b => b.onclick = () => { const r = list[+b.dataset.cc]; copyText(credMsg(r, r.kullanici, r.pw)); });
+    document.querySelectorAll("[data-cs]").forEach(b => b.onclick = () => { const r = list[+b.dataset.cs]; shareText(credMsg(r, r.kullanici, r.pw)); });
+    $("#clOk").onclick = closeSheet;
+  });
 }
 function newHotelSheet(){
   const in30 = dayKey(Date.now() + 15*864e5);
+  const person = (p, t, req) => `<b>${t}</b><div class="row2"><div class="fld"><label for="${p}A">Ad soyad${req?" *":""}</label><input id="${p}A" ${req?"required":""}></div><div class="fld"><label for="${p}P">Telefon</label><input id="${p}P" type="tel" inputmode="tel" placeholder="05xx xxx xx xx"></div></div>`;
   sheet("Yeni otel ve lisans", `<form class="f" id="nhf">
     <div class="fld"><label for="nhA">Otel adı *</label><input id="nhA" required placeholder="Otelin adını yaz"></div>
     <div class="fld"><label for="nhD">Kullanıcı adı uzantısı</label><input id="nhD" autocapitalize="none" spellcheck="false" placeholder="oteladi.com" required></div>
     <div class="row2"><div class="fld"><label for="nhT">Lisans süresi</label>${licSelect("nhT","gun15")}</div><div class="fld"><label for="nhB">Bitiş tarihi</label><input type="date" id="nhB" value="${in30}" required></div></div>
     <div class="row2"><div class="fld"><label for="nhM">Personel sınırı (0 = sınırsız)</label><input type="number" min="0" id="nhM" value="0"></div><div class="fld"><label for="nhI">İletişim / not</label><input id="nhI" placeholder="Yetkili, telefon, fatura notu"></div></div>
-    <b>Otelin genel müdürü</b>
-    <div class="row2"><div class="fld"><label for="nhG">Ad soyad *</label><input id="nhG" required></div><div class="fld"><label for="nhP">Telefon</label><input id="nhP" type="tel" inputmode="tel" placeholder="05xx xxx xx xx"></div></div>
-    <div id="nhE"></div><button class="btn go block" id="nhGo">Oteli oluştur ve hesabı aç</button></form>`, () => {
+    ${person("it", "1. yönetici: Bilgi İşlem (IT) sorumlusu", true)}
+    <div class="hint">Uygulamayı otelde IT kurar ve yönetir: personel hesapları, departmanlar, ayarlar.</div>
+    ${person("gm", "2. yönetici: Genel müdür (isteğe bağlı)", false)}
+    <div class="hint">Genel müdür her şeyi görür ve yönetebilir. Şimdi boş bırakırsan sonra açabilirsin.</div>
+    <div id="nhE"></div><button class="btn go block" id="nhGo">Oteli oluştur ve hesapları aç</button></form>`, () => {
     $("#nhA").addEventListener("input", () => { $("#nhD").value = domainFromHotel($("#nhA").value); });
     $("#nhT").onchange = () => { const t = $("#nhT").value; $("#nhB").value = dayKey(licEnd(t, 0)); $("#nhB").disabled = t === "suresiz"; };
     $("#nhf").onsubmit = async e => { e.preventDefault(); const err = m => $("#nhE").innerHTML = `<div class="banner">${esc(m)}</div>`;
-      const ad = $("#nhA").value.trim(), dom = trLower($("#nhD").value.trim().replace(/^@/,"")), tel = normTel($("#nhP").value), gm = $("#nhG").value.trim();
+      const ad = $("#nhA").value.trim(), dom = trLower($("#nhD").value.trim().replace(/^@/,""));
+      const itAd = $("#itA").value.trim(), itTel = normTel($("#itP").value), gmAd = $("#gmA").value.trim(), gmTel = normTel($("#gmP").value);
       if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dom)) return err("Uzantı oteladi.com şeklinde olmalı.");
-      if ($("#nhP").value.trim() && !telOk(tel)) return err("Telefonu 05xx xxx xx xx şeklinde yaz.");
+      if (($("#itP").value.trim() && !telOk(itTel)) || ($("#gmP").value.trim() && !telOk(gmTel))) return err("Telefonu 05xx xxx xx xx şeklinde yaz.");
+      if (gmAd && userFromName(gmAd, dom) === userFromName(itAd, dom)) return err("IT ve genel müdür farklı kişiler olmalı.");
       if (otelList.some(o => o.domain === dom)) return err("Bu uzantıyla bir otel zaten var.");
       const b = $("#nhGo"); b.disabled = true; b.textContent = "Oluşturuluyor…";
       try {
+        for (const n of [itAd, gmAd].filter(Boolean)) if ((await FS.collection("logins").doc(userFromName(n, dom)).get({source:"server"})).exists) throw {code:"user-taken", kullanici:userFromName(n, dom)};
         const id = (slugUser(ad).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "otel") + "-" + uid8().slice(-4);
+        const o = {id, ad, domain:dom};
         await FS.collection("oteller").doc(id).set({ad, domain:dom, lisansTur:$("#nhT").value, bitis: $("#nhT").value === "suresiz" ? SURESIZ : new Date($("#nhB").value+"T23:59:00").getTime(), durum:"aktif", maxPersonel:+$("#nhM").value||0, iletisim:$("#nhI").value.trim(), olusturma:Date.now(), kurulum:true});
-        const sid = "p" + uid8(), pw = genPw(), parts = slugUser(gm).split(".").filter(Boolean);
-        const kullanici = (parts.length > 1 ? parts[0] + "." + parts[parts.length-1] : (parts[0]||"genelmudur")) + "@" + dom;
-        const taken = await FS.collection("logins").doc(kullanici).get({source:"server"});
-        if (taken.exists) throw {code:"user-taken"};
         await FS.collection("oteller").doc(id).collection("ayarlar").doc("genel").set({girisDomain:dom, otel:{ad}});
-        await hotelAccess(id, {id:sid, ad:gm, dept:"Yönetim", rol:"gm", unvan:"Genel Müdür", tel}, pw, kullanici);
+        const list = [await openHotelAccount(o, "it", itAd, itTel)];
+        if (gmAd) list.push(await openHotelAccount(o, "gm", gmAd, gmTel));
         await FS.collection("oteller").doc(id).update({kurulum:false});
-        credSheet({ad:gm, tel}, kullanici, pw);
-      } catch(er){ b.disabled = false; b.textContent = "Oteli oluştur ve hesabı aç"; err(er.code === "user-taken" ? "Bu kullanıcı adı başka bir otelde var; genel müdürün adını ya da uzantıyı değiştir." : authMsg(er)); }
+        credListSheet(list);
+      } catch(er){ b.disabled = false; b.textContent = "Oteli oluştur ve hesapları aç"; err(er.code === "user-taken" ? `${er.kullanici} kullanıcı adı zaten var; adı ya da uzantıyı değiştir.` : authMsg(er)); }
     };
   });
 }
-function gmPassSheet(o){
-  if (!o.gmKullanici){
-    sheet(`${esc(o.ad)} · genel müdür hesabı`, `<form class="f" id="gnf"><div class="hint">Otelin genel müdürü için hesap aç. Genel müdür kendi personelini uygulamadan ekler.</div>
+function hotelAccountSheet(o, k){
+  const T = HESAP_TUR[k];
+  if (!o[k+"Kullanici"]){
+    sheet(`${esc(o.ad)} · ${T.ad} hesabı`, `<form class="f" id="gnf"><div class="hint">${k==="it"?"IT sorumlusu uygulamayı otelde yönetir; personel hesaplarını o açar.":"Genel müdür her şeyi görür ve yönetebilir."}</div>
       <div class="row2"><div class="fld"><label for="gnA">Ad soyad *</label><input id="gnA" required></div><div class="fld"><label for="gnP">Telefon</label><input id="gnP" type="tel" inputmode="tel" placeholder="05xx xxx xx xx"></div></div>
       <div id="gnE"></div><button class="btn go block" id="gnGo">Hesabı aç</button></form>`, () => {
       $("#gnf").onsubmit = async e => { e.preventDefault(); const err = m => $("#gnE").innerHTML = `<div class="banner">${esc(m)}</div>`;
-        const gm = $("#gnA").value.trim(), tel = normTel($("#gnP").value);
+        const ad = $("#gnA").value.trim(), tel = normTel($("#gnP").value);
         if ($("#gnP").value.trim() && !telOk(tel)) return err("Telefonu 05xx xxx xx xx şeklinde yaz.");
-        const parts = slugUser(gm).split(".").filter(Boolean);
-        const kullanici = (parts.length > 1 ? parts[0] + "." + parts[parts.length-1] : (parts[0]||"genelmudur")) + "@" + (o.domain || domainFromHotel(o.ad));
         const b = $("#gnGo"); b.disabled = true; b.textContent = "Açılıyor…";
-        try { if ((await FS.collection("logins").doc(kullanici).get({source:"server"})).exists) throw {code:"user-taken"};
-          const pw = genPw(); await withSetup(o.id, () => hotelAccess(o.id, {id:"p" + uid8(), ad:gm, dept:"Yönetim", rol:"gm", unvan:"Genel Müdür", tel}, pw, kullanici)); credSheet({ad:gm, tel}, kullanici, pw); }
-        catch(er){ b.disabled = false; b.textContent = "Hesabı aç"; err(er.code === "user-taken" ? "Bu kullanıcı adı zaten var." : authMsg(er)); } };
+        try { const r = await withSetup(o.id, () => openHotelAccount(o, k, ad, tel)); credListSheet([r]); }
+        catch(er){ b.disabled = false; b.textContent = "Hesabı aç"; err(er.code === "user-taken" ? `${er.kullanici} kullanıcı adı zaten var.` : authMsg(er)); } };
     });
     return;
   }
-  sheet(`${esc(o.ad)} · genel müdür`, `<div class="card"><div>${esc(o.gmAd||"")}</div><div>Kullanıcı adı: <b>${esc(o.gmKullanici||"")}</b></div></div>
-    <div class="hint">Genel müdür şifresini unuttuysa yeni şifre ver. Otelin diğer verilerine erişmezsin.</div><button class="btn go block" id="gpGo">Yeni şifre oluştur</button>`, () => {
+  sheet(`${esc(o.ad)} · ${T.ad}`, `<div class="card"><div><b>${esc(o[k+"Ad"]||"")}</b></div><div>Kullanıcı adı: <b>${esc(o[k+"Kullanici"])}</b></div>${o[k+"Tel"]?`<div>Telefon: <b class="num">${esc(fmtTel(o[k+"Tel"]))}</b></div>`:""}</div>
+    <div class="hint">Şifresini unuttuysa yeni şifre ver. Otelin diğer verilerine erişmezsin.</div><button class="btn go block" id="gpGo">Yeni şifre oluştur</button>`, () => {
     $("#gpGo").onclick = async () => { const b = $("#gpGo"); b.disabled = true; b.textContent = "Oluşturuluyor…"; const pw = genPw();
-      try { await withSetup(o.id, () => hotelAccess(o.id, {id:o.gmStaffId, ad:o.gmAd, dept:"Yönetim", rol:"gm", unvan:"Genel Müdür", tel:o.gmTel||"", uid:o.gmUid}, pw, o.gmKullanici)); credSheet({ad:o.gmAd, tel:o.gmTel||""}, o.gmKullanici, pw); }
+      try { await withSetup(o.id, () => hotelAccess(o.id, {id:o[k+"StaffId"], ad:o[k+"Ad"], dept:T.dept, rol:T.rol, unvan:T.unvan, tel:o[k+"Tel"]||"", uid:o[k+"Uid"]}, pw, o[k+"Kullanici"], k)); credSheet({ad:o[k+"Ad"], tel:o[k+"Tel"]||""}, o[k+"Kullanici"], pw); }
       catch(e){ b.disabled = false; b.textContent = "Yeni şifre oluştur"; handleErr(e); } };
   });
 }
