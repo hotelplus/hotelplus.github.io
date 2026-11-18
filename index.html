@@ -168,7 +168,7 @@ form.f{display:flex;flex-direction:column;gap:10px}
 <script>
 /* ======================= AYARLAR (buradan değiştirilebilir) ======================= */
 const APP_ADI = "HotelPlus";
-const APP_VERSION = 19;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
+const APP_VERSION = 20;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
 const WEB_ADRES = "https://hotelplus.github.io/";
 const OTEL_ADI = "Otel";
 const VARSAYILAN_DEPARTMANLAR = ["Yönetim","Bilgi İşlem (IT)","İnsan Kaynakları","Resepsiyon","Kat Hizmetleri","Çamaşırhane","Teknik Servis","Mutfak","Restoran","Bulaşıkhane","Yiyecek & İçecek","Satın Alma","Spa","Güvenlik","Muhasebe","Satış & Rezervasyon","Animasyon","Diğer"];
@@ -330,8 +330,8 @@ function handleErr(e){
 const staffById = id => S.staff.find(s => s.id === id);
 const nameOf = id => (staffById(id) || {}).ad || "—";
 const me = () => staffById(meId);
-const ADMIN_UID = "kXAerL2by7dm4hQVSaOVApu2PB53";
-const isAdmin = () => !!(authUser && (authUser.uid === ADMIN_UID || authUser.email === "yonetici@" + EMAIL_DOMAIN));
+const ADMIN_UIDS = ["kXAerL2by7dm4hQVSaOVApu2PB53", "DiyOdFsJH9cF30rjDAznk2WjJr53"];
+const isAdmin = () => !!(authUser && (ADMIN_UIDS.includes(authUser.uid) || authUser.email === "yonetici@" + EMAIL_DOMAIN));
 const myRol = () => mode === "demo" ? "gm" : ((me() && me().rol) || (member && member.rol) || "personel");
 const myDept = () => (me() && me().dept) || (member && member.dept) || "";
 const isGM = () => myRol() === "gm";
