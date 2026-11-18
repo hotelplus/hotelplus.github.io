@@ -168,7 +168,7 @@ form.f{display:flex;flex-direction:column;gap:10px}
 <script>
 /* ======================= AYARLAR (buradan değiştirilebilir) ======================= */
 const APP_ADI = "HotelPlus";
-const APP_VERSION = 21;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
+const APP_VERSION = 22;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
 const WEB_ADRES = "https://hotelplus.github.io/";
 const OTEL_ADI = "Otel";
 const VARSAYILAN_DEPARTMANLAR = ["Yönetim","Bilgi İşlem (IT)","İnsan Kaynakları","Resepsiyon","Kat Hizmetleri","Çamaşırhane","Teknik Servis","Mutfak","Restoran","Bulaşıkhane","Yiyecek & İçecek","Satın Alma","Spa","Güvenlik","Muhasebe","Satış & Rezervasyon","Animasyon","Diğer"];
@@ -331,7 +331,8 @@ const staffById = id => S.staff.find(s => s.id === id);
 const nameOf = id => (staffById(id) || {}).ad || "—";
 const me = () => staffById(meId);
 const ADMIN_UIDS = ["kXAerL2by7dm4hQVSaOVApu2PB53", "DiyOdFsJH9cF30rjDAznk2WjJr53"];
-const isAdmin = () => !!(authUser && (ADMIN_UIDS.includes(authUser.uid) || authUser.email === "yonetici@" + EMAIL_DOMAIN));
+let saticiCihaz = false;
+const isAdmin = () => !!(authUser && (ADMIN_UIDS.includes(authUser.uid) || saticiCihaz || authUser.email === "yonetici@" + EMAIL_DOMAIN));
 const myRol = () => mode === "demo" ? "gm" : ((me() && me().rol) || (member && member.rol) || "personel");
 const myDept = () => (me() && me().dept) || (member && member.dept) || "";
 const isGM = () => myRol() === "gm";
@@ -391,7 +392,7 @@ function show(v){
   if (mode === "login"){ renderLogin(); return; }
   if (mode === "locked"){ renderLocked(); return; }
   if (mode === "vendor"){ renderVendor(); return; }
-  if (mode === "migrate") return;
+  if (mode === "migrate" || mode === "pairing") return;
   if (VIEWS[current] && VIEWS[current].leave) { try { VIEWS[current].leave(); } catch(e){} }
   current = VIEWS[v] && (!VIEWS[v].allow || VIEWS[v].allow()) ? v : "home";
   closeSheet();
@@ -406,7 +407,7 @@ function show(v){
 }
 window.addEventListener("hashchange", () => show(location.hash.slice(1) || "home"));
 function refresh(){
-  if (mode === "login" || mode === "locked" || mode === "vendor" || mode === "migrate") return;
+  if (mode === "login" || mode === "pairing" || mode === "locked" || mode === "vendor" || mode === "migrate") return;
   renderTop();
   const view = VIEWS[current]; const live = $("#live");
   if (!view || !live) return;
@@ -420,7 +421,7 @@ function refresh(){
   bindUpdate();
 }
 function renderTop(){
-  if (mode === "login" || mode === "locked" || mode === "vendor" || mode === "migrate") return;
+  if (mode === "login" || mode === "pairing" || mode === "locked" || mode === "vendor" || mode === "migrate") return;
   const n = notifications().length;
   const bell = `<button class="hbtn" id="bellBtn" aria-label="Bildirimler">${icon("bell")}${n?`<span class="badge">${n>99?"99+":n}</span>`:""}</button>`;
   const t = VIEWS[current] && VIEWS[current].title;
@@ -485,7 +486,11 @@ async function init(){
     authUser = u;
     unsubs.forEach(f => { try { f(); } catch(e){} }); unsubs = [];
     COLLS.forEach(c => S[c] = []); S.threads = []; firstDuyuru = true; raw.staff = []; raw.guests = []; telMap.staffTel = {}; telMap.guestTel = {}; member = null; meId = null; firstTasks = {}; firstChat = true; migrated = false; backupChecked = false;
-    if (!u){ mode = "login"; renderLogin(); return; }
+    if (!u){ saticiCihaz = false; mode = "login"; renderLogin(); return; }
+    if (u.isAnonymous){
+      try { saticiCihaz = (await FS.collection("saticilar").doc(u.uid).get({source:"server"})).exists; } catch(e){ saticiCihaz = false; }
+      if (!saticiCihaz){ mode = "pairing"; renderPairing(u.uid); return; }
+    }
     try { const d = await col("members").doc(u.uid).get(); member = d.exists ? d.data() : null; } catch(e){ member = null; }
     if (!member && !isAdmin()){ loginErr = "Bu hesabın uygulamaya erişimi kapalı. Yöneticine başvur."; await firebase.auth().signOut(); return; }
     loginErr = ""; meId = (member && member.staffId) || null; DB = FS;
@@ -512,6 +517,19 @@ async function init(){
 const licDaysLeft = () => LIS && LIS.bitis ? Math.ceil((LIS.bitis - Date.now()) / 864e5) : 0;
 const licLocked = () => !LIS || LIS.durum !== "aktif" || !(LIS.bitis > Date.now());
 const SATICI = {ad:"HotelPlus", tel:""};
+
+function renderPairing(uid){
+  closeSheet();
+  $("#top").innerHTML = `<div class="mark">${icon("star","#d9a426")}</div><h1>Lisans girişi</h1>`;
+  $("#main").innerHTML = `<div class="login list"><div class="card"><b style="font:600 17px var(--display)">Bu cihaz tanımlı değil</b>
+    <div>Lisans girişi yalnızca HotelPlus lisans sahibinin tanımlı cihazında çalışır. Bu cihazı tanımlatmak için aşağıdaki cihaz kodunu HotelPlus'a ilet.</div>
+    <div class="card num" style="font:600 15px ui-monospace,monospace;word-break:break-all;user-select:all">${esc(uid)}</div>
+    <div class="row2"><button class="btn" id="pCopy">Kodu kopyala</button><button class="btn" id="pBack">Vazgeç</button></div>
+    <div class="muted">Tanımlama yapılınca bu ekran kendiliğinden açılır; uygulamayı kapatma.</div></div></div>`;
+  $("#pCopy").onclick = () => copyText(uid);
+  $("#pBack").onclick = () => firebase.auth().signOut();
+  unsubs.push(FS.collection("saticilar").doc(uid).onSnapshot(d => { if (d.exists) location.reload(); }, () => {}));
+}
 function renderLocked(){
   closeSheet(); document.querySelectorAll(".fab,.composer,.bulkbar").forEach(n=>n.remove());
   $("#top").innerHTML = `<div class="mark">${icon("star","#d9a426")}</div><h1>${esc(APP_ADI)}</h1>${isAdmin()?`<button class="hbtn" id="lkV">Lisanslar</button>`:""}<button class="hbtn" id="lkO" aria-label="Çıkış">${icon("user")}</button>`;
@@ -592,6 +610,7 @@ function renderLogin(){
     ${updateBanner()}
     <button class="btn go block" id="lGo">Giriş yap</button>
     <button type="button" class="btn" id="lFor">Şifremi unuttum</button>
+    <button type="button" class="btn sm" id="lLis" style="align-self:center;opacity:.8">🔑 Lisans girişi</button>
     <div class="hint" style="text-align:center">Hesabını otel yönetimi açar. Kullanıcı adın ve şifren SMS ile gelir.</div></form>
     </div>`;
   $("#lf").onsubmit = async e => { e.preventDefault(); const b=$("#lGo"); b.disabled=true; b.textContent="Giriş yapılıyor…";
@@ -610,6 +629,7 @@ function renderLogin(){
     } catch(err){ loginErr = authMsg(err); renderLogin(); } };
   bindUpdate();
   $("#lFor").onclick = forgotSheet;
+  $("#lLis").onclick = async () => { try { await firebase.auth().signInAnonymously(); } catch(e){ loginErr = authMsg(e); renderLogin(); } };
 }
 function loginKey(raw){
   raw = String(raw||"").trim();
@@ -2231,6 +2251,11 @@ function hotelAccountSheet(o, k){
 }
 
 function vendorAccountSheet(){
+  if (authUser && authUser.isAnonymous){
+    sheet("Lisans sahibi", `<div class="card"><div>Bu telefon lisans sahibi cihazı olarak tanımlı. Uygulama şifre sormadan açılır.</div></div><button class="btn danger block" id="veOut">Çıkış yap</button>`, () => {
+      $("#veOut").onclick = () => confirmSheet("Çıkış yaparsan bu cihazın lisans tanımı silinir ve yeniden tanımlatman gerekir. Yine de çıkılsın mı?", () => firebase.auth().signOut(), "Çıkış yap"); });
+    return;
+  }
   const em = authUser && authUser.email || "", real = em && !em.endsWith("@" + EMAIL_DOMAIN);
   sheet("Lisans sahibi hesabı", `<div class="card"><div>Giriş: <b>${real ? esc(em) : "yonetici"}</b></div><div class="muted">${real ? "Şifreni unutursan giriş ekranında “Şifremi unuttum”a bu e-postayı yaz; sıfırlama bağlantısı bu adrese gelir." : "Henüz e-posta bağlı değil. Bağlarsan bu e-postayla giriş yapar, şifreni unutunca kendine sıfırlama bağlantısı alırsın."}</div></div>
     <form class="f" id="veF"><div class="fld"><label for="veE">${real?"Yeni e-posta":"E-posta adresin"}</label><input id="veE" type="email" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="hotelplus.destek@gmail.com" required></div>
@@ -2244,7 +2269,7 @@ function vendorAccountSheet(){
     $("#vpF").onsubmit = async e => { e.preventDefault(); const m = t => $("#vpM").innerHTML = `<div class="banner">${esc(t)}</div>`;
       try { await reauth($("#vpO").value); await firebase.auth().currentUser.updatePassword($("#vpN").value); m("Şifren değiştirildi."); $("#vpF").reset(); }
       catch(er){ m(authMsg(er)); } };
-    $("#veOut").onclick = () => confirmSheet("Çıkış yapılsın mı? Tekrar girmek için e-posta ve şifren gerekecek. Çıkış yapmazsan uygulama her açılışta doğrudan açılır.", () => firebase.auth().signOut(), "Çıkış yap");
+    $("#veOut").onclick = () => confirmSheet(authUser && authUser.isAnonymous ? "Çıkış yaparsan bu cihazın lisans tanımı silinir ve yeniden tanımlatman gerekir. Yine de çıkılsın mı?" : "Çıkış yapılsın mı? Tekrar girmek için e-posta ve şifren gerekecek.", () => firebase.auth().signOut(), "Çıkış yap");
   });
 }
 let destekList = [];

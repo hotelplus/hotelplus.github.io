@@ -1,5 +1,5 @@
 // HotelPlus: uygulama dosyalarını önbelleğe alır; veriler Firebase'den canlı gelir.
-const CACHE = "hotelplus-v21";
+const CACHE = "hotelplus-v22";
 self.addEventListener("install", e => { self.skipWaiting(); });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
