@@ -168,7 +168,7 @@ form.f{display:flex;flex-direction:column;gap:10px}
 <script>
 /* ======================= AYARLAR (buradan değiştirilebilir) ======================= */
 const APP_ADI = "HotelPlus";
-const APP_VERSION = 20;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
+const APP_VERSION = 21;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
 const WEB_ADRES = "https://hotelplus.github.io/";
 const OTEL_ADI = "Otel";
 const VARSAYILAN_DEPARTMANLAR = ["Yönetim","Bilgi İşlem (IT)","İnsan Kaynakları","Resepsiyon","Kat Hizmetleri","Çamaşırhane","Teknik Servis","Mutfak","Restoran","Bulaşıkhane","Yiyecek & İçecek","Satın Alma","Spa","Güvenlik","Muhasebe","Satış & Rezervasyon","Animasyon","Diğer"];
@@ -2244,7 +2244,7 @@ function vendorAccountSheet(){
     $("#vpF").onsubmit = async e => { e.preventDefault(); const m = t => $("#vpM").innerHTML = `<div class="banner">${esc(t)}</div>`;
       try { await reauth($("#vpO").value); await firebase.auth().currentUser.updatePassword($("#vpN").value); m("Şifren değiştirildi."); $("#vpF").reset(); }
       catch(er){ m(authMsg(er)); } };
-    $("#veOut").onclick = () => { closeSheet(); firebase.auth().signOut(); };
+    $("#veOut").onclick = () => confirmSheet("Çıkış yapılsın mı? Tekrar girmek için e-posta ve şifren gerekecek. Çıkış yapmazsan uygulama her açılışta doğrudan açılır.", () => firebase.auth().signOut(), "Çıkış yap");
   });
 }
 let destekList = [];
