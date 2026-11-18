@@ -168,7 +168,7 @@ form.f{display:flex;flex-direction:column;gap:10px}
 <script>
 /* ======================= AYARLAR (buradan değiştirilebilir) ======================= */
 const APP_ADI = "HotelPlus";
-const APP_VERSION = 24;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
+const APP_VERSION = 25;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
 const WEB_ADRES = "https://hotelplus.github.io/";
 const OTEL_ADI = "Otel";
 const VARSAYILAN_DEPARTMANLAR = ["Yönetim","Bilgi İşlem (IT)","İnsan Kaynakları","Resepsiyon","Kat Hizmetleri","Çamaşırhane","Teknik Servis","Mutfak","Restoran","Bulaşıkhane","Yiyecek & İçecek","Satın Alma","Spa","Güvenlik","Muhasebe","Satış & Rezervasyon","Animasyon","Diğer"];
@@ -487,12 +487,12 @@ async function init(){
     unsubs.forEach(f => { try { f(); } catch(e){} }); unsubs = [];
     COLLS.forEach(c => S[c] = []); S.threads = []; firstDuyuru = true; raw.staff = []; raw.guests = []; telMap.staffTel = {}; telMap.guestTel = {}; member = null; meId = null; firstTasks = {}; firstChat = true; migrated = false; backupChecked = false;
     if (!u){ saticiCihaz = false; mode = "login"; renderLogin(); return; }
-    if (u.isAnonymous){
+    if (u.isAnonymous || (u.email||"").startsWith("cihaz-")){
       try { saticiCihaz = (await FS.collection("saticilar").doc(u.uid).get({source:"server"})).exists; } catch(e){ saticiCihaz = false; }
-      if (!saticiCihaz){ mode = "pairing"; renderPairing(u.uid); return; }
+      if (!saticiCihaz && u.isAnonymous){ mode = "pairing"; renderPairing(u.uid); return; }
     }
     try { const d = await col("members").doc(u.uid).get(); member = d.exists ? d.data() : null; } catch(e){ member = null; }
-    if (!member && !isAdmin()){ loginErr = "Bu hesabın uygulamaya erişimi kapalı. Yöneticine başvur."; await firebase.auth().signOut(); return; }
+    if (!member && !isAdmin()){ const yk = yetkiliGet(); if (yk && yk.email === u.email) localStorage.removeItem(YKEY); loginErr = "Bu hesabın uygulamaya erişimi kapalı. Yöneticine başvur."; await firebase.auth().signOut(); return; }
     loginErr = ""; meId = (member && member.staffId) || null; DB = FS;
     if (isAdmin()) subscribeOteller();
     if (isAdmin() && (!member || !member.otel)){
@@ -518,6 +518,21 @@ const licDaysLeft = () => LIS && LIS.bitis ? Math.ceil((LIS.bitis - Date.now()) 
 const licLocked = () => !LIS || LIS.durum !== "aktif" || !(LIS.bitis > Date.now());
 const SATICI = {ad:"HotelPlus", tel:""};
 
+
+const YKEY = "hp_yetkili";
+function cihazAdi(){ const u = navigator.userAgent; return (/iPhone|iPad/.test(u) ? "iPhone" : /Android/.test(u) ? "Android" : /Windows/.test(u) ? "Windows bilgisayar" : /Mac/.test(u) ? "Mac" : "Cihaz") + (isNative() ? " · uygulama" : " · tarayıcı"); }
+function yetkiliGet(){ try { return JSON.parse(localStorage.getItem(YKEY) || "null"); } catch(e){ return null; } }
+let ykBusy = false;
+async function ensureDeviceKey(){
+  if (ykBusy || !isAdmin() || yetkiliGet()) return; ykBusy = true;
+  try {
+    const secret = Array.from(crypto.getRandomValues(new Uint8Array(24)), b => b.toString(16).padStart(2, "0")).join("");
+    const email = "cihaz-" + uid8() + "@" + EMAIL_DOMAIN;
+    const sa = await secondaryAuth(); const cred = await sa.createUserWithEmailAndPassword(email, secret); const nu = cred.user.uid; await sa.signOut();
+    await FS.collection("saticilar").doc(nu).set({ad: cihazAdi() + " · yetkili girişi", cihaz: cihazAdi(), zaman: Date.now()});
+    localStorage.setItem(YKEY, JSON.stringify({email, secret}));
+  } catch(e){ console.warn("yetkili anahtar", e); } finally { ykBusy = false; }
+}
 function renderPairing(uid){
   closeSheet();
   $("#top").innerHTML = `<div class="mark">${icon("star","#d9a426")}</div><h1>Lisans girişi</h1>`;
@@ -527,7 +542,7 @@ function renderPairing(uid){
     <div class="row2"><button class="btn" id="pCopy">Kodu kopyala</button><button class="btn" id="pBack">Vazgeç</button></div>
     <div class="muted">Tanımlama yapılınca bu ekran kendiliğinden açılır; uygulamayı kapatma.</div></div></div>`;
   $("#pCopy").onclick = () => copyText(uid);
-  const cihaz = (/iPhone|iPad/.test(navigator.userAgent) ? "iPhone" : /Android/.test(navigator.userAgent) ? "Android" : /Windows/.test(navigator.userAgent) ? "Windows bilgisayar" : /Mac/.test(navigator.userAgent) ? "Mac" : "Cihaz") + (isNative() ? " · uygulama" : " · tarayıcı");
+  const cihaz = cihazAdi();
   FS.collection("cihazTalepleri").doc(uid).set({zaman:Date.now(), cihaz}).catch(() => {});
   $("#pBack").onclick = () => firebase.auth().signOut();
   unsubs.push(FS.collection("saticilar").doc(uid).onSnapshot(d => { if (d.exists) location.reload(); }, () => {}));
@@ -604,8 +619,10 @@ const canStaffAdminFromMember = () => isAdmin() || (member && ["gm","mudur"].inc
 function renderLogin(){
   closeSheet(); document.querySelectorAll(".fab,.composer").forEach(n=>n.remove());
   $("#top").innerHTML = `<div class="mark">${icon("star","#d9a426")}</div><h1>${esc(APP_ADI)}</h1>`;
+  const yk = yetkiliGet();
   $("#main").innerHTML = `<div class="login list">
-    <form class="card f" id="lf"><b style="font:600 18px var(--display)">Giriş yap</b>
+    ${yk ? `<div class="card f"><button class="btn go block" id="lY" style="padding:18px;font-size:17px">🔑 Yetkili girişi</button><button type="button" class="btn sm" id="lShow" style="align-self:center">Personel girişi</button></div>` : ""}
+    <form class="card f" id="lf" ${yk ? 'style="display:none"' : ""}><b style="font:600 18px var(--display)">Giriş yap</b>
     <div class="fld"><label for="lU">Kullanıcı adı veya telefon</label><input id="lU" type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ad.soyad@otel.com ya da 05xx…" required></div>
     <div class="fld"><label for="lP">Şifre</label><input id="lP" type="password" autocomplete="current-password" required></div>
     ${loginErr?`<div class="banner" style="background:var(--bad-soft)">${esc(loginErr)}</div>`:""}
@@ -630,6 +647,12 @@ function renderLogin(){
     } catch(err){ loginErr = authMsg(err); renderLogin(); } };
   bindUpdate();
   $("#lFor").onclick = forgotSheet;
+  if (yk){
+    $("#lShow").onclick = () => { $("#lf").style.display = ""; $("#lShow").remove(); };
+    $("#lY").onclick = async () => { const b = $("#lY"); b.disabled = true; b.textContent = "Giriş yapılıyor…";
+      try { await firebase.auth().signInWithEmailAndPassword(yk.email, yk.secret); }
+      catch(e){ if (/user-not-found|wrong-password|invalid-credential|user-disabled/.test(e.code||"")) { localStorage.removeItem(YKEY); loginErr = "Bu cihazın yetkili girişi kaldırılmış."; } else loginErr = authMsg(e); renderLogin(); } };
+  }
   // Gizli lisans girişi: üstteki yıldız simgesine 3 saniye içinde 5 kez dokun
   let tap = [];
   const mk = document.querySelector("#top .mark");
@@ -2135,7 +2158,7 @@ async function deleteHotel(o){
   } catch(e){ handleErr(e); }
 }
 function bindVendor(){
-  vendorExtras();
+  vendorExtras(); ensureDeviceKey();
   document.querySelectorAll("[data-cy]").forEach(b => b.onclick = async () => { const c = cihazTalep.find(x => x.id === b.dataset.cy); try { await FS.collection("saticilar").doc(c.id).set({ad:c.cihaz||"Cihaz", cihaz:c.cihaz||"", zaman:Date.now()}); await FS.collection("cihazTalepleri").doc(c.id).delete(); toast("Cihaza izin verildi."); } catch(e){ handleErr(e); } });
   document.querySelectorAll("[data-cn]").forEach(b => b.onclick = async () => { try { await FS.collection("cihazTalepleri").doc(b.dataset.cn).delete(); } catch(e){ handleErr(e); } });
   document.querySelectorAll("[data-pwshow]").forEach(b => b.onclick = () => { const el = b.previousElementSibling; const shown = el.textContent !== "••••••"; el.textContent = shown ? "••••••" : el.dataset.pw; b.textContent = shown ? "Göster" : "Gizle"; });
@@ -2265,7 +2288,7 @@ function vendorAccountSheet(){
   if (authUser && authUser.isAnonymous){
     sheet("Lisans sahibi", `<div class="card"><div>Bu telefon lisans sahibi cihazı olarak tanımlı. Uygulama şifre sormadan açılır.</div></div><button class="btn block" id="veDev">Tanımlı cihazlar</button><button class="btn danger block" id="veOut">Çıkış yap</button>`, () => {
       $("#veDev").onclick = cihazListSheet;
-      $("#veOut").onclick = () => confirmSheet("Çıkış yaparsan bu cihazın lisans tanımı silinir ve yeniden tanımlatman gerekir. Yine de çıkılsın mı?", () => firebase.auth().signOut(), "Çıkış yap"); });
+      $("#veOut").onclick = () => confirmSheet(yetkiliGet() ? "Çıkış yapılsın mı? Tekrar girmek için giriş ekranındaki Yetkili girişi butonuna basman yeterli." : "Çıkış yaparsan bu cihazın lisans tanımı silinir. Yine de çıkılsın mı?", () => firebase.auth().signOut(), "Çıkış yap"); });
     return;
   }
   const em = authUser && authUser.email || "", real = em && !em.endsWith("@" + EMAIL_DOMAIN);
