@@ -168,7 +168,7 @@ form.f{display:flex;flex-direction:column;gap:10px}
 <script>
 /* ======================= AYARLAR (buradan değiştirilebilir) ======================= */
 const APP_ADI = "HotelPlus";
-const APP_VERSION = 22;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
+const APP_VERSION = 23;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
 const WEB_ADRES = "https://hotelplus.github.io/";
 const OTEL_ADI = "Otel";
 const VARSAYILAN_DEPARTMANLAR = ["Yönetim","Bilgi İşlem (IT)","İnsan Kaynakları","Resepsiyon","Kat Hizmetleri","Çamaşırhane","Teknik Servis","Mutfak","Restoran","Bulaşıkhane","Yiyecek & İçecek","Satın Alma","Spa","Güvenlik","Muhasebe","Satış & Rezervasyon","Animasyon","Diğer"];
@@ -522,11 +522,13 @@ function renderPairing(uid){
   closeSheet();
   $("#top").innerHTML = `<div class="mark">${icon("star","#d9a426")}</div><h1>Lisans girişi</h1>`;
   $("#main").innerHTML = `<div class="login list"><div class="card"><b style="font:600 17px var(--display)">Bu cihaz tanımlı değil</b>
-    <div>Lisans girişi yalnızca HotelPlus lisans sahibinin tanımlı cihazında çalışır. Bu cihazı tanımlatmak için aşağıdaki cihaz kodunu HotelPlus'a ilet.</div>
-    <div class="card num" style="font:600 15px ui-monospace,monospace;word-break:break-all;user-select:all">${esc(uid)}</div>
+    <div>Bu cihazın talebi lisans sahibine gönderildi. Lisans sahibi, tanımlı telefonunda <b>Lisans yönetimi → Yeni cihaz talepleri</b> bölümünden bu kodu görüp <b>İzin ver</b> derse bu ekran kendiliğinden açılır.</div>
+    <div class="card" style="text-align:center"><div class="muted">Cihaz kodu</div><div class="num" style="font:700 28px ui-monospace,monospace;letter-spacing:3px">${esc(uid.slice(-6).toUpperCase())}</div></div>
     <div class="row2"><button class="btn" id="pCopy">Kodu kopyala</button><button class="btn" id="pBack">Vazgeç</button></div>
     <div class="muted">Tanımlama yapılınca bu ekran kendiliğinden açılır; uygulamayı kapatma.</div></div></div>`;
   $("#pCopy").onclick = () => copyText(uid);
+  const cihaz = (/iPhone|iPad/.test(navigator.userAgent) ? "iPhone" : /Android/.test(navigator.userAgent) ? "Android" : /Windows/.test(navigator.userAgent) ? "Windows bilgisayar" : /Mac/.test(navigator.userAgent) ? "Mac" : "Cihaz") + (isNative() ? " · uygulama" : " · tarayıcı");
+  FS.collection("cihazTalepleri").doc(uid).set({zaman:Date.now(), cihaz}).catch(() => {});
   $("#pBack").onclick = () => firebase.auth().signOut();
   unsubs.push(FS.collection("saticilar").doc(uid).onSnapshot(d => { if (d.exists) location.reload(); }, () => {}));
 }
@@ -2100,11 +2102,11 @@ const licSelect = (id, sel) => `<select id="${id}">${Object.entries(LIS_TUR).map
 function licEnd(tur, from){ return tur === "suresiz" ? SURESIZ : Math.max(Date.now(), from||0) + LIS_GUN[tur]*864e5; }
 function vendorHtml(){
   const now = Date.now();
-  return destekHtml() + `<button class="btn go block" id="vnNew">+ Yeni otel ve lisans</button>
+  return cihazHtml() + destekHtml() + `<button class="btn go block" id="vnNew">+ Yeni otel ve lisans</button>
     <div class="hint">Lisans süresi dolan ya da askıya alınan otelde kimse işlem yapamaz; veriler silinmez. Otellerin içindeki personel, misafir ve görev bilgilerini buradan göremezsin. Lisans bilgilerini otel personeli görmez.</div>`
     + (otelList.length ? otelList.map(o => { const sz = o.bitis >= SURESIZ - 864e5; const dl = Math.ceil(((o.bitis||0) - now) / 864e5); const bad = o.durum !== "aktif" || dl <= 0;
       return `<div class="card" style="${bad?"border-color:var(--bad)":!sz&&dl<=7?"border-color:var(--warn)":""}"><div class="t1 li"><div class="main"><b>${esc(o.ad)}</b><span>${esc(o.domain||"")} · ${esc(turAd(o.lisansTur))}${o.maxPersonel?` · en fazla ${o.maxPersonel} personel`:""}</span></div><span class="chip ${bad?"bad":!sz&&dl<=7?"warn":"ok"}">${o.durum!=="aktif"?"Askıda":dl<=0?"Süresi doldu":sz?"Süresiz":dl+" gün"}</span></div>
-        <div class="meta" style="display:flex;flex-direction:column;gap:2px"><span>Bitiş: <b>${sz?"süresiz":o.bitis?fmtD(o.bitis):"—"}</b></span>${["it","gm"].map(k => o[k+"Kullanici"] ? `<span><b>${HESAP_TUR[k].kisa}:</b> ${esc(o[k+"Ad"]||"")}${o[k+"Tel"]?` · <a href="tel:${esc(o[k+"Tel"])}">${esc(fmtTel(o[k+"Tel"]))}</a>`:""}<br><span class="muted">${esc(o[k+"Kullanici"])}</span></span>` : `<span class="muted">${HESAP_TUR[k].kisa}: hesap yok</span>`).join("")}${o.iletisim?`<span>Not: ${esc(o.iletisim)}</span>`:""}</div>
+        <div class="meta" style="display:flex;flex-direction:column;gap:2px"><span>Bitiş: <b>${sz?"süresiz":o.bitis?fmtD(o.bitis):"—"}</b></span>${["it","gm"].map(k => o[k+"Kullanici"] ? `<span><b>${HESAP_TUR[k].kisa}:</b> ${esc(o[k+"Ad"]||"")}${o[k+"Tel"]?` · <a href="tel:${esc(o[k+"Tel"])}">${esc(fmtTel(o[k+"Tel"]))}</a>`:""}<br><span class="muted">${esc(o[k+"Kullanici"])}</span><br><span>Şifre: ${(vSifre[o.id]||{})[k] && vSifre[o.id][k].kullanici === o[k+"Kullanici"] ? `<b class="num" data-pw="${esc(vSifre[o.id][k].sifre)}">••••••</b> <button class="btn sm" data-pwshow style="padding:2px 8px">Göster</button>` : `<span class="muted">kayıtlı değil (yeni şifre ver)</span>`}</span></span>` : `<span class="muted">${HESAP_TUR[k].kisa}: hesap yok</span>`).join("")}${o.iletisim?`<span>Not: ${esc(o.iletisim)}</span>`:""}</div>
         <div class="acts"><button class="btn ok sm" data-vl="${esc(o.id)}">Lisans ver / uzat</button><button class="btn sm ${o.durum==="aktif"?"danger":""}" data-vs="${esc(o.id)}">${o.durum==="aktif"?"Askıya al":"Aktif et"}</button>${["it","gm"].map(k => `<button class="btn sm" data-vg="${esc(o.id)}" data-k="${k}">${HESAP_TUR[k].kisa} ${o[k+"Kullanici"]?"şifresi":"hesabı aç"}</button>`).join("")}<button class="btn sm danger" data-vdel="${esc(o.id)}">Sil</button></div></div>`; }).join("")
       : `<div class="empty">Henüz otel yok.</div>`);
 }
@@ -2131,6 +2133,9 @@ async function deleteHotel(o){
 }
 function bindVendor(){
   vendorExtras();
+  document.querySelectorAll("[data-cy]").forEach(b => b.onclick = async () => { const c = cihazTalep.find(x => x.id === b.dataset.cy); try { await FS.collection("saticilar").doc(c.id).set({ad:c.cihaz||"Cihaz", cihaz:c.cihaz||"", zaman:Date.now()}); await FS.collection("cihazTalepleri").doc(c.id).delete(); toast("Cihaza izin verildi."); } catch(e){ handleErr(e); } });
+  document.querySelectorAll("[data-cn]").forEach(b => b.onclick = async () => { try { await FS.collection("cihazTalepleri").doc(b.dataset.cn).delete(); } catch(e){ handleErr(e); } });
+  document.querySelectorAll("[data-pwshow]").forEach(b => b.onclick = () => { const el = b.previousElementSibling; const shown = el.textContent !== "••••••"; el.textContent = shown ? "••••••" : el.dataset.pw; b.textContent = shown ? "Göster" : "Gizle"; });
   $("#vnNew").onclick = newHotelSheet;
   document.querySelectorAll("[data-dsx]").forEach(b => b.onclick = async () => { try { await FS.collection("destekTalepleri").doc(b.dataset.dsx).delete(); } catch(e){ handleErr(e); } });
   document.querySelectorAll("[data-dsr]").forEach(b => b.onclick = () => { const d = destekList.find(x => x.id === b.dataset.dsr); const o = otelList.find(x => x.id === d.otel); if (o) hotelAccountSheet(o, d.tur); });
@@ -2169,6 +2174,7 @@ async function hotelAccess(otelId, st, pw, kullanici, k){
   await FS.collection("logins").doc(kullanici).set({email, staffId:st.id, otel:otelId, yonetici:k});
   if (telOk(st.tel||"")) await FS.collection("logins").doc(st.tel).set({email, staffId:st.id, otel:otelId, yonetici:k});
   try { await FS.collection("destekTalepleri").doc(kullanici).delete(); if (st.tel) await FS.collection("destekTalepleri").doc(st.tel).delete(); } catch(e){}
+  try { await FS.collection("saticiSifreler").doc(otelId).set({[k]:{sifre:pw, kullanici, zaman:Date.now()}}, {merge:true}); } catch(e){}
   await FS.collection("oteller").doc(otelId).update({[k+"StaffId"]:st.id, [k+"Ad"]:st.ad, [k+"Kullanici"]:kullanici, [k+"Uid"]:uid, [k+"Tel"]:st.tel||""});
   return uid;
 }
@@ -2243,7 +2249,9 @@ function hotelAccountSheet(o, k){
     return;
   }
   sheet(`${esc(o.ad)} · ${T.ad}`, `<div class="card"><div><b>${esc(o[k+"Ad"]||"")}</b></div><div>Kullanıcı adı: <b>${esc(o[k+"Kullanici"])}</b></div>${o[k+"Tel"]?`<div>Telefon: <b class="num">${esc(fmtTel(o[k+"Tel"]))}</b></div>`:""}</div>
-    <div class="hint">Şifresini unuttuysa yeni şifre ver. Otelin diğer verilerine erişmezsin.</div><button class="btn go block" id="gpGo">Yeni şifre oluştur</button>`, () => {
+    ${(vSifre[o.id]||{})[k] && vSifre[o.id][k].kullanici === o[k+"Kullanici"] ? `<div class="card"><div>Son verilen şifre: <b class="num">${esc(vSifre[o.id][k].sifre)}</b></div><div class="muted">${fmtD(vSifre[o.id][k].zaman)}</div><div class="acts"><button class="btn sm" id="gpSend">Bu bilgileri tekrar gönder</button></div></div>` : ""}
+    <div class="hint">Şifresini unuttuysa yeni şifre ver; eski şifre geçersiz olur. Otelin diğer verilerine erişmezsin.</div><button class="btn go block" id="gpGo">Yeni şifre oluştur</button>`, () => {
+    if ($("#gpSend")) $("#gpSend").onclick = () => { const r = vSifre[o.id][k]; credSheet({ad:o[k+"Ad"], tel:o[k+"Tel"]||""}, r.kullanici, r.sifre); };
     $("#gpGo").onclick = async () => { const b = $("#gpGo"); b.disabled = true; b.textContent = "Oluşturuluyor…"; const pw = genPw();
       try { await withSetup(o.id, () => hotelAccess(o.id, {id:o[k+"StaffId"], ad:o[k+"Ad"], dept:T.dept, rol:T.rol, unvan:T.unvan, tel:o[k+"Tel"]||"", uid:o[k+"Uid"]}, pw, o[k+"Kullanici"], k)); credSheet({ad:o[k+"Ad"], tel:o[k+"Tel"]||""}, o[k+"Kullanici"], pw); }
       catch(e){ b.disabled = false; b.textContent = "Yeni şifre oluştur"; handleErr(e); } };
@@ -2252,7 +2260,8 @@ function hotelAccountSheet(o, k){
 
 function vendorAccountSheet(){
   if (authUser && authUser.isAnonymous){
-    sheet("Lisans sahibi", `<div class="card"><div>Bu telefon lisans sahibi cihazı olarak tanımlı. Uygulama şifre sormadan açılır.</div></div><button class="btn danger block" id="veOut">Çıkış yap</button>`, () => {
+    sheet("Lisans sahibi", `<div class="card"><div>Bu telefon lisans sahibi cihazı olarak tanımlı. Uygulama şifre sormadan açılır.</div></div><button class="btn block" id="veDev">Tanımlı cihazlar</button><button class="btn danger block" id="veOut">Çıkış yap</button>`, () => {
+      $("#veDev").onclick = cihazListSheet;
       $("#veOut").onclick = () => confirmSheet("Çıkış yaparsan bu cihazın lisans tanımı silinir ve yeniden tanımlatman gerekir. Yine de çıkılsın mı?", () => firebase.auth().signOut(), "Çıkış yap"); });
     return;
   }
@@ -2280,8 +2289,23 @@ function destekHtml(){
       <div class="acts">${o?`<button class="btn go sm" data-dsr="${esc(d.id)}">Yeni şifre ver</button>`:""}<button class="btn sm" data-dsx="${esc(d.id)}">Kaldır</button></div>`; }).join("")}</div>`;
 }
 let destekFixed = false;
+let vSifre = {}, cihazTalep = [], cihazlar = [];
+function cihazHtml(){
+  const kod = id => esc(id.slice(-6).toUpperCase());
+  let h = "";
+  if (cihazTalep.length) h += `<div class="card" style="border-color:var(--warn)"><b>Yeni cihaz talepleri (${cihazTalep.length})</b><div class="muted">Kodu yeni cihazın ekranındakiyle karşılaştır. Tanımadığın bir talebe izin verme.</div>${cihazTalep.map(c => `<div class="li" style="margin-top:8px"><div class="main"><b class="num" style="letter-spacing:2px">${kod(c.id)}</b><span>${esc(c.cihaz||"")} · ${fmtD(c.zaman)}</span></div></div><div class="acts"><button class="btn go sm" data-cy="${esc(c.id)}">İzin ver</button><button class="btn sm" data-cn="${esc(c.id)}">Reddet</button></div>`).join("")}</div>`;
+  return h;
+}
+function cihazListSheet(){
+  sheet("Tanımlı cihazlar", (cihazlar.length ? cihazlar.map(c => `<div class="card"><div class="li"><div class="main"><b>${esc(c.ad || c.cihaz || "Cihaz")}</b><span class="num">${esc(c.id.slice(-6).toUpperCase())}${c.id === (authUser&&authUser.uid) ? " · bu cihaz" : ""}${c.zaman?" · "+fmtD(c.zaman):""}</span></div></div>${c.id !== (authUser&&authUser.uid) ? `<div class="acts"><button class="btn sm danger" data-cdel="${esc(c.id)}">Kaldır</button></div>` : ""}</div>`).join("") : `<div class="empty">Tanımlı cihaz yok.</div>`) + `<div class="hint">Kaybolan ya da artık kullanmadığın cihazı kaldır; o cihazdan lisans girişi kapanır.</div>`, () => {
+    document.querySelectorAll("[data-cdel]").forEach(b => b.onclick = () => confirmSheet("Bu cihazın lisans girişi kaldırılsın mı?", async () => { try { await FS.collection("saticilar").doc(b.dataset.cdel).delete(); toast("Cihaz kaldırıldı."); } catch(e){ handleErr(e); } }, "Kaldır"));
+  });
+}
 function vendorExtras(){
   if (destekFixed) return; destekFixed = true;
+  unsubs.push(FS.collection("cihazTalepleri").onSnapshot(sn => { const once = cihazTalep.length; cihazTalep = sn.docs.map(d => ({id:d.id, ...d.data()})).filter(c => Date.now() - (c.zaman||0) < 864e5).sort((a,b) => b.zaman - a.zaman); if (cihazTalep.length > once) { try { beep(); } catch(e){} } if (mode === "vendor") renderVendor(); else refresh(); }, () => {}));
+  unsubs.push(FS.collection("saticilar").onSnapshot(sn => { cihazlar = sn.docs.map(d => ({id:d.id, ...d.data()})); }, () => {}));
+  unsubs.push(FS.collection("saticiSifreler").onSnapshot(sn => { vSifre = {}; sn.docs.forEach(d => vSifre[d.id] = d.data()); if (mode === "vendor") renderVendor(); else refresh(); }, () => {}));
   unsubs.push(FS.collection("destekTalepleri").onSnapshot(sn => { const before = destekList.length; destekList = sn.docs.map(d => ({id:d.id, ...d.data()})).sort((a,b) => b.zaman - a.zaman); if (destekList.length > before && before >= 0) { try { beep(); } catch(e){} } if (mode === "vendor") renderVendor(); else refresh(); }, () => {}));
 }
 async function markAdminLogins(){
