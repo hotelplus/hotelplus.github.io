@@ -168,7 +168,7 @@ form.f{display:flex;flex-direction:column;gap:10px}
 <script>
 /* ======================= AYARLAR (buradan değiştirilebilir) ======================= */
 const APP_ADI = "HotelPlus";
-const APP_VERSION = 23;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
+const APP_VERSION = 24;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
 const WEB_ADRES = "https://hotelplus.github.io/";
 const OTEL_ADI = "Otel";
 const VARSAYILAN_DEPARTMANLAR = ["Yönetim","Bilgi İşlem (IT)","İnsan Kaynakları","Resepsiyon","Kat Hizmetleri","Çamaşırhane","Teknik Servis","Mutfak","Restoran","Bulaşıkhane","Yiyecek & İçecek","Satın Alma","Spa","Güvenlik","Muhasebe","Satış & Rezervasyon","Animasyon","Diğer"];
@@ -612,7 +612,6 @@ function renderLogin(){
     ${updateBanner()}
     <button class="btn go block" id="lGo">Giriş yap</button>
     <button type="button" class="btn" id="lFor">Şifremi unuttum</button>
-    <button type="button" class="btn sm" id="lLis" style="align-self:center;opacity:.8">🔑 Lisans girişi</button>
     <div class="hint" style="text-align:center">Hesabını otel yönetimi açar. Kullanıcı adın ve şifren SMS ile gelir.</div></form>
     </div>`;
   $("#lf").onsubmit = async e => { e.preventDefault(); const b=$("#lGo"); b.disabled=true; b.textContent="Giriş yapılıyor…";
@@ -631,7 +630,11 @@ function renderLogin(){
     } catch(err){ loginErr = authMsg(err); renderLogin(); } };
   bindUpdate();
   $("#lFor").onclick = forgotSheet;
-  $("#lLis").onclick = async () => { try { await firebase.auth().signInAnonymously(); } catch(e){ loginErr = authMsg(e); renderLogin(); } };
+  // Gizli lisans girişi: üstteki yıldız simgesine 3 saniye içinde 5 kez dokun
+  let tap = [];
+  const mk = document.querySelector("#top .mark");
+  if (mk) mk.addEventListener("click", async () => { const t = Date.now(); tap = tap.filter(x => t - x < 3000); tap.push(t);
+    if (tap.length >= 5){ tap = []; try { await firebase.auth().signInAnonymously(); } catch(e){ loginErr = authMsg(e); renderLogin(); } } });
 }
 function loginKey(raw){
   raw = String(raw||"").trim();
