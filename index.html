@@ -32,6 +32,10 @@
   --accent:#8fb0ff; --accent-ink:#08163d; --accent-soft:#1c2850;
   --ok:#4cd087; --warn:#f2b636; --bad:#ff6b6b; --info:#7aa2ff;
   --ok-soft:#163222; --warn-soft:#382b10; --bad-soft:#3d1a1a; --info-soft:#1a2440; color-scheme:dark;}}
+:root[data-theme="turkuaz"]{
+  --bg:#eef6f6; --surface:#ffffff; --ink:#10282b; --muted:#5b6f72; --line:#d3e4e4;
+  --accent:#0b6f78; --accent-ink:#ffffff; --accent-soft:#d9f0ef; --grad:linear-gradient(120deg,#05363b 0%,#0a6971 60%,#12a19c 100%); color-scheme:light;}
+:root[data-theme="turkuaz"] .mark{background:#05363b}
 :root[data-theme="dark"]{
   --bg:#121118; --surface:#1c1b24; --ink:#ecebf2; --muted:#a19eae; --line:#2e2c39;
   --accent:#8fb0ff; --accent-ink:#08163d; --accent-soft:#1c2850;
@@ -47,6 +51,12 @@ header.top h1{font:600 15px/1.2 var(--display);margin:0;flex:1;min-width:0;white
 .hbtn{background:rgba(255,255,255,.18);border:0;border-radius:10px;color:#fff;min-width:40px;height:40px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;font-weight:600;font-size:13px;position:relative;flex:none}
 .hbtn svg{width:20px;height:20px}
 .hbtn .badge{top:-4px;right:-4px}
+.sig{text-align:center;font-size:11.5px;color:var(--muted);padding:6px 12px 14px;opacity:.85}
+.sig a{color:inherit}
+.tema{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tema button{border:2px solid var(--line);border-radius:12px;padding:8px 4px;background:var(--surface);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-weight:600;font-size:12.5px}
+.tema button.on{border-color:var(--accent)}
+.tema i{display:block;width:100%;height:26px;border-radius:7px}
 .mark{width:30px;height:30px;border-radius:9px;background:#08163d;border:1px solid #d9a426;display:grid;place-items:center;flex:none}
 .mark svg{width:18px;height:18px}
 main{padding:12px;display:flex;flex-direction:column;gap:12px}
@@ -153,11 +163,13 @@ form.f{display:flex;flex-direction:column;gap:10px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 @media (prefers-reduced-motion:no-preference){.tile,.btn,.stat{transition:transform .1s}.btn:active,.tile:active,.stat:active{transform:scale(.97)}}
 </style>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("hp_tema")||"light";}catch(e){document.documentElement.dataset.theme="light";}</script>
 </head>
 <body>
 <div class="app">
   <header class="top" id="top"></header>
   <main id="main"></main>
+  <div class="sig" id="sig">HotelPlus · By-Hkn</div>
 </div>
 <div id="overlay"></div>
 <script src="vendor/capacitor.js"></script>
@@ -168,7 +180,7 @@ form.f{display:flex;flex-direction:column;gap:10px}
 <script>
 /* ======================= AYARLAR (buradan değiştirilebilir) ======================= */
 const APP_ADI = "HotelPlus";
-const APP_VERSION = 25;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
+const APP_VERSION = 26;   // her yayında 1 artırılır; telefonlarda "Güncelle" bunu karşılaştırır
 const WEB_ADRES = "https://hotelplus.github.io/";
 const OTEL_ADI = "Otel";
 const VARSAYILAN_DEPARTMANLAR = ["Yönetim","Bilgi İşlem (IT)","İnsan Kaynakları","Resepsiyon","Kat Hizmetleri","Çamaşırhane","Teknik Servis","Mutfak","Restoran","Bulaşıkhane","Yiyecek & İçecek","Satın Alma","Spa","Güvenlik","Muhasebe","Satış & Rezervasyon","Animasyon","Diğer"];
@@ -421,6 +433,7 @@ function refresh(){
   bindUpdate();
 }
 function renderTop(){
+  updateSig();
   if (mode === "login" || mode === "pairing" || mode === "locked" || mode === "vendor" || mode === "migrate") return;
   const n = notifications().length;
   const bell = `<button class="hbtn" id="bellBtn" aria-label="Bildirimler">${icon("bell")}${n?`<span class="badge">${n>99?"99+":n}</span>`:""}</button>`;
@@ -516,7 +529,13 @@ async function init(){
 }
 const licDaysLeft = () => LIS && LIS.bitis ? Math.ceil((LIS.bitis - Date.now()) / 864e5) : 0;
 const licLocked = () => !LIS || LIS.durum !== "aktif" || !(LIS.bitis > Date.now());
-const SATICI = {ad:"HotelPlus", tel:""};
+const SATICI = {ad:"HotelPlus", tel:"", mail:"hotelplusdestek@gmail.com"};
+const TEMALAR = [["light","Açık","linear-gradient(120deg,#08163d,#1d48b8)","#f3f4f8"],["turkuaz","Turkuaz","linear-gradient(120deg,#05363b,#12a19c)","#eef6f6"],["dark","Koyu","linear-gradient(120deg,#08163d,#1d48b8)","#121118"]];
+function setTema(t){ document.documentElement.dataset.theme = t; try { localStorage.setItem("hp_tema", t); } catch(e){} const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = t === "turkuaz" ? "#05363b" : "#08163d"; }
+function temaHtml(){ const cur = document.documentElement.dataset.theme || "light"; return `<b>Görünüm</b><div class="tema">${TEMALAR.map(([k,l,g,b]) => `<button type="button" data-tema="${k}" class="${cur===k?"on":""}"><i style="background:${g};border-bottom:10px solid ${b}"></i>${l}</button>`).join("")}</div>`; }
+function bindTema(){ document.querySelectorAll("[data-tema]").forEach(b => b.onclick = () => { setTema(b.dataset.tema); document.querySelectorAll("[data-tema]").forEach(x => x.classList.toggle("on", x === b)); }); }
+const destekGorur = () => mode !== "demo" && (isGM() || myDept() === IT);
+function updateSig(){ const el = document.getElementById("sig"); if (!el) return; el.innerHTML = `HotelPlus · By-Hkn` + ((mode === "vendor") ? "" : (member && destekGorur()) ? `<br>Destek: <a href="mailto:${SATICI.mail}">${SATICI.mail}</a>` : ""); }
 
 
 const YKEY = "hp_yetkili";
@@ -548,10 +567,10 @@ function renderPairing(uid){
   unsubs.push(FS.collection("saticilar").doc(uid).onSnapshot(d => { if (d.exists) location.reload(); }, () => {}));
 }
 function renderLocked(){
-  closeSheet(); document.querySelectorAll(".fab,.composer,.bulkbar").forEach(n=>n.remove());
+  updateSig(); closeSheet(); document.querySelectorAll(".fab,.composer,.bulkbar").forEach(n=>n.remove());
   $("#top").innerHTML = `<div class="mark">${icon("star","#d9a426")}</div><h1>${esc(APP_ADI)}</h1>${isAdmin()?`<button class="hbtn" id="lkV">Lisanslar</button>`:""}<button class="hbtn" id="lkO" aria-label="Çıkış">${icon("user")}</button>`;
   const why = "Otelinizin uygulama kullanımı şu an kapalı.";
-  $("#main").innerHTML = `<div class="login list"><div class="card" style="border-color:var(--bad)"><b style="font:600 18px var(--display)">Uygulama kullanıma kapalı</b><div>${esc(why)} Lütfen otel yönetiminize başvurun. Verileriniz silinmedi; lisans yenilenince kaldığınız yerden devam edersiniz.</div>${member && member.rol === "gm" ? `<div class="muted">Yeniden açmak için ${esc(SATICI.ad)} ile iletişime geçin${SATICI.tel?` · <a href="tel:${esc(SATICI.tel.replace(/\s/g,""))}">${esc(SATICI.tel)}</a>`:""}.</div>` : ""}</div></div>`;
+  $("#main").innerHTML = `<div class="login list"><div class="card" style="border-color:var(--bad)"><b style="font:600 18px var(--display)">Uygulama kullanıma kapalı</b><div>${esc(why)} Lütfen otel yönetiminize başvurun. Verileriniz silinmedi; lisans yenilenince kaldığınız yerden devam edersiniz.</div>${member && member.rol === "gm" ? `<div class="muted">Yeniden açmak için ${esc(SATICI.ad)} ile iletişime geçin: <a href="mailto:${SATICI.mail}">${SATICI.mail}</a>${SATICI.tel?` · <a href="tel:${esc(SATICI.tel.replace(/\s/g,""))}">${esc(SATICI.tel)}</a>`:""}.</div>` : ""}</div></div>`;
   $("#lkO").onclick = () => firebase.auth().signOut();
   if ($("#lkV")) $("#lkV").onclick = renderVendor;
 }
@@ -617,7 +636,7 @@ async function maybeMigrate(){
 const canStaffAdminFromMember = () => isAdmin() || (member && ["gm","mudur"].includes(member.rol));
 
 function renderLogin(){
-  closeSheet(); document.querySelectorAll(".fab,.composer").forEach(n=>n.remove());
+  updateSig(); closeSheet(); document.querySelectorAll(".fab,.composer").forEach(n=>n.remove());
   $("#top").innerHTML = `<div class="mark">${icon("star","#d9a426")}</div><h1>${esc(APP_ADI)}</h1>`;
   const yk = yetkiliGet();
   $("#main").innerHTML = `<div class="login list">
@@ -752,10 +771,13 @@ function accountMenu(){
   sheet(esc(m ? m.ad : isAdmin() ? "Genel Müdür" : "Hesabım"), `
     <div class="muted">${esc(ROLLER[myRol()])}${myDept()?" · "+esc(myDept()):""}${m&&m.tel?" · "+esc(fmtTel(m.tel)):""}</div>
     ${m&&m.kullanici?`<div class="muted">Kullanıcı adı: ${esc(m.kullanici)}</div>`:""}
-    <div class="hint">Uygulama sürümü: 1.0.${APP_VERSION}</div>
+    ${destekGorur() ? `<div class="card"><div>HotelPlus destek</div><a href="mailto:${SATICI.mail}"><b>${SATICI.mail}</b></a></div>` : ""}
+    ${temaHtml()}
+    <div class="hint">Uygulama sürümü: 1.0.${APP_VERSION} · By-Hkn</div>
     ${mode!=="demo"&&isGM()?`<button class="btn block" id="amPw">Şifremi değiştir</button>`:""}
     ${isAdmin()&&!m?`<button class="btn block" id="amProf">Bilgilerimi tamamla</button>`:""}
     ${mode!=="demo"?`<button class="btn danger block" id="amOut">Çıkış yap</button>`:""}`, () => {
+    bindTema();
     if ($("#amPw")) $("#amPw").onclick = changePwSheet;
     if ($("#amProf")) $("#amProf").onclick = profileSheet;
     if ($("#amOut")) $("#amOut").onclick = () => { closeSheet(); cancelAllAlarms(); firebase.auth().signOut(); };
@@ -874,7 +896,7 @@ VIEWS.home = {
     const T = (v, ic, col, soft, label, badge) => `<button class="tile" data-go="${v}"><span class="ic" style="background:${soft}">${icon(ic,col)}</span><span class="t">${label}</span>${badge?`<span class="badge">${badge}</span>`:""}</button>`;
     const dolu = S.rooms.filter(x=>x.durum==="dolu").length;
     const dl = licDaysLeft();
-    return `${LIS && dl <= 7 && member && member.rol === "gm" ? `<div class="banner" style="background:var(--bad-soft)"><b>Uygulama kullanım süreniz ${dl} gün sonra doluyor.</b> Kesinti olmaması için ${esc(SATICI.ad)} ile iletişime geç${SATICI.tel?": "+esc(SATICI.tel):"."}</div>` : ""}
+    return `${LIS && dl <= 7 && member && member.rol === "gm" ? `<div class="banner" style="background:var(--bad-soft)"><b>Uygulama kullanım süreniz ${dl} gün sonra doluyor.</b> Kesinti olmaması için ${esc(SATICI.ad)} ile iletişime geç: <a href="mailto:${SATICI.mail}">${SATICI.mail}</a></div>` : ""}
       <div class="hello"><div><b>Merhaba${m?", "+esc(m.ad.split(" ")[0]):""}</b><div class="muted" style="font-size:12.5px">${esc(ROLLER[myRol()])}${myDept()?" · "+esc(myDept()):""}</div></div></div>
       <button class="btn go block" data-go="yeni">${icon("plus")} Görev / arıza / istek gönder</button>
       <h2>${isGM()?"Oteldeki açık görevler":"Departmanımdaki açık görevler"}</h2>
@@ -2172,7 +2194,7 @@ function bindVendor(){
 }
 VIEWS.lisans = { title: "Lisans yönetimi", allow: () => isAdmin(), live: vendorHtml, bind: bindVendor };
 function renderVendor(){
-  closeSheet(); document.querySelectorAll(".fab,.composer,.bulkbar").forEach(n=>n.remove());
+  updateSig(); closeSheet(); document.querySelectorAll(".fab,.composer,.bulkbar").forEach(n=>n.remove());
   $("#top").innerHTML = `<div class="mark">${icon("star","#d9a426")}</div><h1>Lisans yönetimi</h1>${OTEL&&mode!=="vendor"?`<button class="hbtn" id="vnBack">Otele dön</button>`:""}<button class="hbtn" id="vnOut" aria-label="Çıkış">${icon("user")}</button>`;
   $("#main").innerHTML = `<div class="list">${vendorHtml()}</div>`;
   bindVendor();
@@ -2286,8 +2308,8 @@ function hotelAccountSheet(o, k){
 
 function vendorAccountSheet(){
   if (authUser && authUser.isAnonymous){
-    sheet("Lisans sahibi", `<div class="card"><div>Bu telefon lisans sahibi cihazı olarak tanımlı. Uygulama şifre sormadan açılır.</div></div><button class="btn block" id="veDev">Tanımlı cihazlar</button><button class="btn danger block" id="veOut">Çıkış yap</button>`, () => {
-      $("#veDev").onclick = cihazListSheet;
+    sheet("Lisans sahibi", `<div class="card"><div>Bu telefon lisans sahibi cihazı olarak tanımlı. Uygulama şifre sormadan açılır.</div></div>${temaHtml()}<button class="btn block" id="veDev">Tanımlı cihazlar</button><button class="btn danger block" id="veOut">Çıkış yap</button>`, () => {
+      $("#veDev").onclick = cihazListSheet; bindTema();
       $("#veOut").onclick = () => confirmSheet(yetkiliGet() ? "Çıkış yapılsın mı? Tekrar girmek için giriş ekranındaki Yetkili girişi butonuna basman yeterli." : "Çıkış yaparsan bu cihazın lisans tanımı silinir. Yine de çıkılsın mı?", () => firebase.auth().signOut(), "Çıkış yap"); });
     return;
   }
